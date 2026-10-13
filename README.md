@@ -172,3 +172,7 @@ CI (`.github/workflows/ci.yml`) runs pre-commit and pytest on Python 3.10 and 3.
 It also runs every Monday against the latest dependency releases, so upstream breaking
 changes show up without new commits (GitHub pauses scheduled runs after 60 days without
 repository activity; re-enable them in the Actions tab).
+
+## License
+
+MIT, see [LICENSE](LICENSE). Keep `LICENSE` in projects created from this template.

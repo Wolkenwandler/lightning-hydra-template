@@ -5,6 +5,21 @@
 - 模板仓库：<https://github.com/Wolkenwandler/lightning-hydra-template>，下文用 `<模板>` 表示它的本地 clone 路径。
 - 导入工具：`<模板>/scripts/new_project.py`。只用 Python 标准库，Python >= 3.9 即可运行，不需要先装项目依赖。
 
+## 选择分支
+
+| 分支 | 训练框架 | 适合 |
+|---|---|---|
+| `main` | PyTorch Lightning | 想用现成的功能（callback、多种分布式策略），少写训练代码 |
+| `accelerate` | Hugging Face Accelerate 加上精简的训练循环 `src/trainer.py` | 想完全掌控训练循环，或者要和 Hugging Face 生态（transformers 等）配合 |
+
+两个分支的配置结构、输出目录、记录方式（csv 加离线 wandb）和导入方式相同。导入脚本复制的是**运行它的那份 checkout** 里的文件。要从模板主 clone 当前没有检出的分支导入时，不要切换主 clone 的分支，用一个临时 worktree：
+
+```bash
+git -C <模板> worktree add /tmp/template-accelerate accelerate
+python3 /tmp/template-accelerate/scripts/new_project.py <目标目录>
+git -C <模板> worktree remove /tmp/template-accelerate
+```
+
 ## 快速导入
 
 ```bash
@@ -16,7 +31,7 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 1. 复制模板里所有被 git 跟踪的文件，下面“不复制的文件”除外。
 2. 把项目名写进 `pyproject.toml`、`environment.yaml`、wandb 的 `project` 字段和 README 标题。项目名默认取目标目录名。
-3. 在目标目录写一个 `.template-source`，记录模板的远程地址和 commit，以后同步模板更新时要用到。
+3. 在目标目录写一个 `.template-source`，记录模板的远程地址、分支和 commit，以后同步模板更新时要用到。
 4. **不覆盖任何已有文件**：只要有一个文件会被覆盖，脚本就什么都不复制，并列出这些冲突文件。
 5. 模板有未提交的修改时直接拒绝执行，保证 `.template-source` 里记录的 commit 和实际复制的代码一致。
 
@@ -110,11 +125,12 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 ```bash
 C=$(sed -n 's/^commit: //p' .template-source)
-git -C <模板> log --oneline $C..HEAD                       # 有哪些更新
-git -C <模板> diff $C..HEAD -- . ':!TEMPLATE.md' ':!scripts' ':!docs' > /tmp/template.diff
+BR=$(sed -n 's/^branch: //p' .template-source)   # 导入时的模板分支，如 main 或 accelerate
+git -C <模板> log --oneline $C..$BR                       # 有哪些更新
+git -C <模板> diff $C..$BR -- . ':!TEMPLATE.md' ':!scripts/new_project.py' ':!docs' > /tmp/template.diff
 git apply --check /tmp/template.diff && git apply /tmp/template.diff
 ```
 
 - 如果项目里改过的文件和更新冲突，`--check` 会失败。这时逐个文件对照 diff 手动合并，或者用 `git apply --reject` 处理能应用的部分，再手动处理 `.rej` 文件。
 - 涉及项目名的那几行（见“快速导入”第 2 点）在新项目里已经被替换过，合并时保留新项目的名字。
-- 合并并验证后，把 `.template-source` 里的 `commit` 更新为 `git -C <模板> rev-parse HEAD`，和这次合并放在同一个提交里。
+- 合并并验证后，把 `.template-source` 里的 `commit` 更新为 `git -C <模板> rev-parse $BR`，和这次合并放在同一个提交里。

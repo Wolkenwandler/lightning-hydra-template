@@ -56,9 +56,13 @@ class MNISTLitModule(LightningModule):
 
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False)
+        # modules and optimizer/scheduler factories are left out, so that the checkpoint only
+        # holds plain data and can be loaded with `torch.load(weights_only=True)`
+        self.save_hyperparameters(logger=False, ignore=["net", "optimizer", "scheduler"])
 
         self.net = net
+        self.optimizer_factory = optimizer
+        self.scheduler_factory = scheduler
 
         # loss function
         self.criterion = torch.nn.CrossEntropyLoss()
@@ -198,9 +202,9 @@ class MNISTLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
-        if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
+        optimizer = self.optimizer_factory(params=self.trainer.model.parameters())
+        if self.scheduler_factory is not None:
+            scheduler = self.scheduler_factory(optimizer=optimizer)
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {

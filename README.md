@@ -152,3 +152,6 @@ make format      # pre-commit run -a (ruff lint + format, codespell, ...)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pre-commit and pytest on Python 3.10 and 3.12.
+It also runs every Monday against the latest dependency releases, so upstream breaking
+changes show up without new commits (GitHub pauses scheduled runs after 60 days without
+repository activity; re-enable them in the Actions tab).

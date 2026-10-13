@@ -85,13 +85,24 @@ python src/train.py +trainer.precision=16-mixed +trainer.gradient_clip_val=0.5
 # resume from a checkpoint
 python src/train.py ckpt_path="/path/to/ckpt/name.ckpt"
 
-# log to tensorboard / wandb / several loggers
+# log to tensorboard instead, or turn off metric logging
 python src/train.py logger=tensorboard
-python src/train.py "logger=[csv,wandb]"
+python src/train.py "logger=[]"
 ```
 
 Outputs (checkpoints, logs, the resolved config) go to
-`logs/<task_name>/runs/<timestamp>/`. Each run first asks for tags if none are set
+`logs/<task_name>/runs/<timestamp>/`.
+Metrics are logged to `csv/version_0/metrics.csv` and to an offline wandb run in `wandb/`
+inside that directory; nothing is uploaded during training. Upload runs afterwards with:
+
+```bash
+wandb login   # once per machine
+wandb sync logs/train/runs/<timestamp>/wandb/offline-run-*
+wandb sync logs/train/multiruns/<timestamp>/*/wandb/offline-run-*   # all jobs of a multirun
+```
+
+The wandb project is set in `configs/logger/wandb.yaml`; set `logger.wandb.offline=false` to
+log online directly. Each run first asks for tags if none are set
 (`extras.enforce_tags`); set `tags=[...]` in the experiment config or on the command line.
 
 ## Evaluation

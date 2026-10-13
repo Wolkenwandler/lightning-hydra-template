@@ -17,6 +17,7 @@ dependencies = [
   "hydra-colorlog>=1.2",
   "rootutils>=1.0.7",
   "rich>=13",
+  "wandb>=0.19",
 ]
 
 [project.optional-dependencies]

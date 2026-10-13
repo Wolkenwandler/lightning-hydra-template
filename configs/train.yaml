@@ -7,7 +7,9 @@ defaults:
   - data: mnist
   - model: mnist
   - callbacks: default
-  - logger: null # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  # metrics go to a csv file and an offline wandb run in the output dir (upload later with
+  # `wandb sync`); change on the command line, e.g. `logger=tensorboard` or `logger=[]` for none
+  - logger: [csv, wandb]
   - trainer: default
   - paths: default
   - extras: default

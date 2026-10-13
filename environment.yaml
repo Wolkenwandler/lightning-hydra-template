@@ -23,7 +23,7 @@ dependencies:
 
   # --------- loggers --------- #
   # - tensorboard
-  # - wandb
+  - wandb>=0.19
 
   - pip:
       - hydra-colorlog==1.2.0

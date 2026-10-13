@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
+from hydra import compose, initialize
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, open_dict
 
@@ -19,6 +20,29 @@ def test_train_fast_dev_run(cfg_train: DictConfig) -> None:
         cfg_train.trainer.fast_dev_run = True
         cfg_train.trainer.accelerator = "cpu"
     train(cfg_train)
+
+
+@RunIf(wandb=True)
+def test_train_default_loggers(cfg_train: DictConfig, tmp_path: Path) -> None:
+    """Train with the default loggers: a csv file and an offline wandb run in the output dir.
+
+    :param cfg_train: A DictConfig containing a valid training configuration.
+    :param tmp_path: The output directory of the run.
+    """
+    with initialize(version_base="1.3", config_path="../configs"):
+        default_cfg = compose(config_name="train.yaml")
+    assert sorted(default_cfg.logger) == ["csv", "wandb"]
+    assert default_cfg.logger.wandb.offline
+
+    HydraConfig().set_config(cfg_train)
+    with open_dict(cfg_train):
+        cfg_train.logger = default_cfg.logger
+        cfg_train.trainer.max_epochs = 1
+    train(cfg_train)
+
+    metrics = (tmp_path / "csv" / "version_0" / "metrics.csv").read_text()
+    assert "val/acc" in metrics.splitlines()[0]
+    assert len(list((tmp_path / "wandb").glob("offline-run-*/*.wandb"))) == 1
 
 
 @RunIf(min_gpus=1)

@@ -10,6 +10,9 @@ A compact template for training deep learning models with
 [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) and [Hydra](https://hydra.cc/).
 It ships a small MNIST example that you replace with your own data and model.
 
+The default trainer uses CUDA. Settings for other devices (e.g. `accelerator: mps` on a Mac)
+are kept on a separate branch per device.
+
 Based on [ashleve/lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template) (MIT),
 trimmed down and updated to current versions.
 
@@ -27,7 +30,7 @@ trimmed down and updated to current versions.
 │   ├── logger                   <- csv / tensorboard / wandb
 │   ├── model                    <- LightningModules
 │   ├── paths                    <- Project paths
-│   ├── trainer                  <- default / gpu / ddp
+│   ├── trainer                  <- default (1 CUDA GPU) / ddp
 │   ├── train.yaml               <- Main config for training
 │   └── eval.yaml                <- Main config for evaluation
 ├── data                      <- Datasets (git-ignored)
@@ -63,12 +66,12 @@ pip install -e ".[dev]"
 ## Training
 
 ```bash
-# train with the default config (picks cuda / mps / cpu automatically)
+# train with the default config (1 CUDA GPU)
 python src/train.py
 
-# choose a trainer config
-python src/train.py trainer=gpu
+# multi-GPU with DDP, or CPU
 python src/train.py trainer=ddp trainer.devices=4
+python src/train.py trainer.accelerator=cpu
 
 # run an experiment config from configs/experiment/
 python src/train.py experiment=example

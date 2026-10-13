@@ -5,8 +5,8 @@ default_root_dir: ${paths.output_dir}
 min_epochs: 1 # prevents early stopping
 max_epochs: 10
 
-# picks cuda, mps (Apple Silicon) or cpu, whichever is available
-accelerator: auto
+# CUDA by default; other devices (e.g. mps on a Mac) keep their settings on their own branch
+accelerator: gpu
 devices: 1
 
 # mixed precision for extra speed-up

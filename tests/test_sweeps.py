@@ -6,7 +6,7 @@ from tests.helpers.run_if import RunIf
 from tests.helpers.run_sh_command import run_sh_command
 
 startfile = "src/train.py"
-overrides = ["logger=[]"]
+overrides = ["logger=[]", "trainer.accelerator=cpu"]
 
 
 @RunIf(sh=True)
@@ -55,7 +55,6 @@ def test_hydra_sweep_ddp_sim(tmp_path: Path) -> None:
         startfile,
         "-m",
         "hydra.sweep.dir=" + str(tmp_path),
-        "trainer.accelerator=cpu",
         "trainer.devices=2",
         "+trainer.strategy=ddp_spawn",
         "trainer.max_epochs=3",

@@ -16,6 +16,9 @@ are kept on a separate branch per device.
 Based on [ashleve/lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template) (MIT),
 trimmed down and updated to current versions.
 
+To start a new project from this template, or to import it into an existing one, see
+[TEMPLATE.md](TEMPLATE.md) (written for both people and coding agents).
+
 ## Project Structure
 
 ```

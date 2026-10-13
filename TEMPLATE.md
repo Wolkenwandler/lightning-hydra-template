@@ -66,15 +66,43 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 ## 验证
 
-在服务器上执行，不在本地执行：
+在服务器上执行，不在本地执行。**优先用目标机器上已有的环境，不急于新建环境**：
 
-```bash
-conda env create -f environment.yaml   # 或复用已有环境，再补装新依赖
-conda activate <项目名>
-pytest -v                              # 包括 slow 测试
-python src/train.py trainer.max_epochs=1
-python src/train.py debug=default
-```
+1. **先检查已有环境**（例如容器的默认 Python）里的关键包：
+
+   ```bash
+   python -c "import sys, torch, lightning, hydra, torchmetrics; print(sys.version.split()[0], torch.__version__, torch.cuda.is_available(), lightning.__version__, hydra.__version__, torchmetrics.__version__)"
+   python -c "import omegaconf, rootutils, rich, colorlog, wandb, pytest"   # 缺哪个包就会报错
+   ```
+
+2. **直接在已有环境里跑**。模板靠 `rootutils` 定位项目根目录，不需要 `pip install -e .`：
+
+   ```bash
+   pytest -v                              # 包括 slow 测试
+   python src/train.py trainer.max_epochs=1
+   python src/train.py debug=default
+   ```
+
+   不要在共享环境里运行 `pip install -e .`：它会按 `pyproject.toml` 升级已有的包，比如把 lightning 升到 2.6.6 以上，影响其他用这个环境的人。`sh` 只有 `tests/test_sweeps.py` 用到，缺少时这几个测试会自动跳过，可以直接运行 `python src/train.py -m ...` 来补测。
+
+3. **缺包或版本不够时**，不要装进共享环境，而是在它上面建一个叠加环境，只补缺的包：
+
+   ```bash
+   python -m venv --system-site-packages <叠加环境目录>
+   <叠加环境目录>/bin/pip install <缺少的包>
+   ```
+
+4. **以上都不行，或者项目需要长期独立维护环境时**，再新建环境：`conda env create -f environment.yaml`。
+
+已有环境里的版本低于 `pyproject.toml` 的下限时，只要测试通过就可以先用。但要在实验记录里写明实际版本。注意 lightning 2.6.6 之前的版本缺少 `load_from_checkpoint` 的安全修复，只加载自己生成的 checkpoint 时风险很小。
+
+已经完整验证过的环境组合：
+
+| Python | torch | lightning | Hydra | 说明 |
+|---|---|---|---|---|
+| 3.12 | 2.13.0 | 2.6.6 | 1.3.7 / 1.4.0rc1 | conda-forge 新建的环境 |
+| 3.11 | 2.8.0+cu128 | 2.6.1 | 1.3.2 | 容器自带的环境，没有 `sh`，扫参改为直接运行 |
+| 3.10 / 3.12 | 最新 CPU 版 | 最新 | 最新 1.3.x | GitHub CI |
 
 ## 同步模板的后续更新
 

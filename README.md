@@ -2,7 +2,7 @@
 
 [![python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![pytorch](https://img.shields.io/badge/PyTorch-2.4+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![lightning](https://img.shields.io/badge/Lightning-2.4+-792ee5?logo=lightning&logoColor=white)](https://lightning.ai/docs/pytorch/stable/)
+[![lightning](https://img.shields.io/badge/Lightning-2.6.6+-792ee5?logo=lightning&logoColor=white)](https://lightning.ai/docs/pytorch/stable/)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
 [![ruff](https://img.shields.io/badge/Code%20Style-Ruff-261230)](https://docs.astral.sh/ruff/)
 

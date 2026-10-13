@@ -5,6 +5,8 @@ from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
+from src.utils import plain_partial
+
 
 class MNISTLitModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -61,8 +63,9 @@ class MNISTLitModule(LightningModule):
         self.save_hyperparameters(logger=False, ignore=["net", "optimizer", "scheduler"])
 
         self.net = net
-        self.optimizer_factory = optimizer
-        self.scheduler_factory = scheduler
+        # plain partials, so that the module can be pickled (e.g. by ddp_spawn) with Hydra >= 1.4
+        self.optimizer_factory = plain_partial(optimizer)
+        self.scheduler_factory = plain_partial(scheduler)
 
         # loss function
         self.criterion = torch.nn.CrossEntropyLoss()

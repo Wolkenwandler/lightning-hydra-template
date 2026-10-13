@@ -3,7 +3,7 @@
 [![python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![pytorch](https://img.shields.io/badge/PyTorch-2.4+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![lightning](https://img.shields.io/badge/Lightning-2.6.6+-792ee5?logo=lightning&logoColor=white)](https://lightning.ai/docs/pytorch/stable/)
-[![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
+[![hydra](https://img.shields.io/badge/Config-Hydra_1.3+-89b8cd)](https://hydra.cc/)
 [![ruff](https://img.shields.io/badge/Code%20Style-Ruff-261230)](https://docs.astral.sh/ruff/)
 
 A compact template for training deep learning models with
@@ -135,6 +135,12 @@ Keep `save_hyperparameters(...)` to plain values (numbers, strings, lists): pass
 `ignore=[...]` for modules and optimizer/scheduler factories, so that checkpoints load
 with `torch.load(weights_only=True)` (default since PyTorch 2.6).
 See `src/models/mnist_module.py` and [docs/solutions.md](docs/solutions.md).
+
+Hydra 1.4 only instantiates `_target_`s listed in `EXECUTION_WHITELIST`
+(`src/utils/hydra_utils.py`; currently `src.*`, `lightning.pytorch.*` and `torch.optim.*`), so add
+the package of any other target there, e.g. `"torchvision.transforms.*"`. Pass `_partial_` factories
+through `plain_partial(...)` before storing them on a `LightningModule`, as `MNISTLitModule` does,
+so that the module stays picklable for `ddp_spawn`.
 
 Values from other config groups can be shared through interpolation, e.g.
 `some_param: ${data.some_param}` in a model config.

@@ -8,6 +8,24 @@ from hydra import compose, initialize
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import DictConfig, open_dict
 
+from src.utils import EXECUTION_WHITELIST, HAS_EXECUTION_WHITELIST
+
+
+@pytest.fixture(autouse=True)
+def hydra_execution_whitelist():
+    """Apply the execution whitelist of the entry points to `instantiate` calls in tests.
+
+    Tests call `train` / `evaluate` and `instantiate` directly, outside of `@hydra.main`.
+    """
+    if not HAS_EXECUTION_WHITELIST:  # Hydra 1.3
+        yield
+        return
+
+    from hydra.utils import execution_whitelist
+
+    with execution_whitelist(EXECUTION_WHITELIST):
+        yield
+
 
 @pytest.fixture(scope="package")
 def cfg_train_global() -> DictConfig:

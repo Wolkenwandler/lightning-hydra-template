@@ -15,7 +15,7 @@ dependencies:
   - torchvision=0.*
   - lightning>=2.6.6,<3
   - torchmetrics=1.*
-  - hydra-core=1.3.*
+  - hydra-core>=1.3.2,<1.5
   - rich>=13
   - pytest=8.*
   - pre-commit=4.*

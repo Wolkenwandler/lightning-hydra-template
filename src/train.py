@@ -28,6 +28,7 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.utils import (
     RankedLogger,
     extras,
+    hydra_main_kwargs,
     instantiate_callbacks,
     instantiate_loggers,
     log_hyperparameters,
@@ -103,7 +104,12 @@ def train(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
     return metric_dict, object_dict
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="train.yaml")
+@hydra.main(
+    version_base="1.3",
+    config_path="../configs",
+    config_name="train.yaml",
+    **hydra_main_kwargs(),
+)
 def main(cfg: DictConfig) -> None:
     """Main entry point for training.
 

@@ -3,6 +3,7 @@ from collections.abc import Callable
 from importlib.util import find_spec
 from typing import Any
 
+import torch
 from omegaconf import DictConfig
 
 from src.utils import pylogger, rich_utils
@@ -90,6 +91,19 @@ def task_wrapper(task_func: Callable) -> Callable:
                     log.info("Closing wandb!")
                     wandb.finish()
 
+            # allow the next run in this process (tests, multirun) to use other settings
+            reset_accelerate_state()
+
         return metric_dict, object_dict
 
     return wrap
+
+
+def reset_accelerate_state() -> None:
+    """Reset Accelerate's process-wide state, so that a new `Accelerator` can use other settings
+    (e.g. `cpu` or `mixed_precision`). The process group of a distributed run is kept."""
+    from accelerate.state import AcceleratorState, GradientState
+
+    distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
+    AcceleratorState._reset_state(reset_partial_state=not distributed)
+    GradientState._reset_state()

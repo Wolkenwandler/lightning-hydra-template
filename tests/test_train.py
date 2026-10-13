@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -7,19 +8,31 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, open_dict
 
 from src.train import train
+from tests.helpers.cpu_processes import CPU_ONLY_ENV, TORCHRUN_2_CPU
 from tests.helpers.run_if import RunIf
 
 
-def test_train_fast_dev_run(cfg_train: DictConfig) -> None:
-    """Run for 1 train, val and test step.
+def _one_batch_each(cfg: DictConfig) -> None:
+    """Run 1 train, val and test batch."""
+    with open_dict(cfg):
+        cfg.trainer.limit_train_batches = 1
+        cfg.trainer.limit_val_batches = 1
+        cfg.trainer.limit_test_batches = 1
+
+
+def test_train_cpu(cfg_train: DictConfig, tmp_path: Path) -> None:
+    """Run for 1 train, val and test batch on the CPU.
 
     :param cfg_train: A DictConfig containing a valid training configuration.
+    :param tmp_path: The output directory of the run.
     """
     HydraConfig().set_config(cfg_train)
-    with open_dict(cfg_train):
-        cfg_train.trainer.fast_dev_run = True
-        cfg_train.trainer.accelerator = "cpu"
-    train(cfg_train)
+    _one_batch_each(cfg_train)
+    metric_dict, _ = train(cfg_train)
+
+    assert {"train/acc", "val/acc", "val/acc_best", "test/acc"} <= set(metric_dict)
+    assert (tmp_path / "checkpoints" / "best" / "model.safetensors").exists()
+    assert (tmp_path / "checkpoints" / "last" / "model.safetensors").exists()
 
 
 @RunIf(wandb=True)
@@ -37,24 +50,25 @@ def test_train_default_loggers(cfg_train: DictConfig, tmp_path: Path) -> None:
     HydraConfig().set_config(cfg_train)
     with open_dict(cfg_train):
         cfg_train.logger = default_cfg.logger
-        cfg_train.trainer.max_epochs = 1
     train(cfg_train)
 
-    metrics = (tmp_path / "csv" / "version_0" / "metrics.csv").read_text()
-    assert "val/acc" in metrics.splitlines()[0]
+    header, *rows = (tmp_path / "csv" / "metrics.csv").read_text().splitlines()
+    assert {"step", "epoch", "train/acc", "val/acc", "test/acc"} <= set(header.split(","))
+    assert len(rows) == 2  # one row per epoch, one for the test
+    assert (tmp_path / "csv" / "hparams.yaml").exists()
     assert len(list((tmp_path / "wandb").glob("offline-run-*/*.wandb"))) == 1
 
 
 @RunIf(min_gpus=1)
-def test_train_fast_dev_run_gpu(cfg_train: DictConfig) -> None:
-    """Run for 1 train, val and test step on GPU.
+def test_train_gpu(cfg_train: DictConfig) -> None:
+    """Run for 1 train, val and test batch on GPU.
 
     :param cfg_train: A DictConfig containing a valid training configuration.
     """
     HydraConfig().set_config(cfg_train)
+    _one_batch_each(cfg_train)
     with open_dict(cfg_train):
-        cfg_train.trainer.fast_dev_run = True
-        cfg_train.trainer.accelerator = "gpu"
+        cfg_train.trainer.cpu = False
     train(cfg_train)
 
 
@@ -67,38 +81,52 @@ def test_train_epoch_gpu_amp(cfg_train: DictConfig) -> None:
     """
     HydraConfig().set_config(cfg_train)
     with open_dict(cfg_train):
-        cfg_train.trainer.max_epochs = 1
-        cfg_train.trainer.accelerator = "gpu"
-        cfg_train.trainer.precision = 16
-    train(cfg_train)
+        cfg_train.trainer.cpu = False
+        cfg_train.trainer.mixed_precision = "fp16"
+    metric_dict, _ = train(cfg_train)
+    assert metric_dict["train/loss"] == metric_dict["train/loss"]  # not NaN
 
 
 @pytest.mark.slow
-def test_train_epoch_double_val_loop(cfg_train: DictConfig) -> None:
-    """Train 1 epoch with validation loop twice per epoch.
+def test_train_grad_accumulation_and_clipping(cfg_train: DictConfig) -> None:
+    """Train 1 epoch with gradient accumulation and gradient clipping.
 
     :param cfg_train: A DictConfig containing a valid training configuration.
     """
     HydraConfig().set_config(cfg_train)
     with open_dict(cfg_train):
-        cfg_train.trainer.max_epochs = 1
-        cfg_train.trainer.val_check_interval = 0.5
-    train(cfg_train)
+        cfg_train.trainer.limit_train_batches = 8
+        cfg_train.trainer.gradient_accumulation_steps = 2
+        cfg_train.trainer.gradient_clip_val = 0.5
+    _, object_dict = train(cfg_train)
+    assert object_dict["trainer"].state.global_step == 4  # 8 batches / 2
 
 
 @pytest.mark.slow
-def test_train_ddp_sim(cfg_train: DictConfig) -> None:
-    """Simulate DDP (Distributed Data Parallel) on 2 CPU processes.
+def test_train_ddp_sim(tmp_path: Path) -> None:
+    """Train on 2 CPU processes started with `torchrun`.
 
-    :param cfg_train: A DictConfig containing a valid training configuration.
+    :param tmp_path: The output directory of the run.
     """
-    HydraConfig().set_config(cfg_train)
-    with open_dict(cfg_train):
-        cfg_train.trainer.max_epochs = 2
-        cfg_train.trainer.accelerator = "cpu"
-        cfg_train.trainer.devices = 2
-        cfg_train.trainer.strategy = "ddp_spawn"
-    train(cfg_train)
+    command = [
+        *TORCHRUN_2_CPU,
+        "src/train.py",
+        f"hydra.run.dir={tmp_path}",
+        "logger=[]",
+        "trainer.cpu=true",
+        "trainer.progress_bar=false",
+        "trainer.max_epochs=2",
+        "trainer.limit_train_batches=0.01",
+        "trainer.limit_val_batches=0.1",
+        "trainer.limit_test_batches=0.1",
+        "extras.print_config=false",
+        "extras.enforce_tags=false",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, env=CPU_ONLY_ENV)
+    assert result.returncode == 0, result.stderr[-3000:]
+
+    assert "Processes: 2" in (tmp_path / "train.log").read_text()
+    assert (tmp_path / "checkpoints" / "last" / "model.safetensors").exists()
 
 
 @pytest.mark.slow
@@ -110,23 +138,21 @@ def test_train_resume(tmp_path: Path, cfg_train: DictConfig) -> None:
     """
     with open_dict(cfg_train):
         cfg_train.trainer.max_epochs = 1
-
     HydraConfig().set_config(cfg_train)
     metric_dict_1, _ = train(cfg_train)
 
     files = os.listdir(tmp_path / "checkpoints")
-    assert "last.ckpt" in files
-    assert "epoch_000.ckpt" in files
+    assert "last" in files
+    assert "best" in files
 
     with open_dict(cfg_train):
-        cfg_train.ckpt_path = str(tmp_path / "checkpoints" / "last.ckpt")
+        cfg_train.ckpt_path = str(tmp_path / "checkpoints" / "last")
         cfg_train.trainer.max_epochs = 2
 
-    metric_dict_2, _ = train(cfg_train)
+    metric_dict_2, object_dict = train(cfg_train)
 
-    files = os.listdir(tmp_path / "checkpoints")
-    assert "epoch_001.ckpt" in files
-    assert "epoch_002.ckpt" not in files
-
+    assert metric_dict_1["epoch"] == 0
+    assert metric_dict_2["epoch"] == 1  # resumed after the first epoch, ran only the second
+    assert object_dict["trainer"].state.epoch == 2
     assert metric_dict_1["train/acc"] < metric_dict_2["train/acc"]
     assert metric_dict_1["val/acc"] < metric_dict_2["val/acc"]

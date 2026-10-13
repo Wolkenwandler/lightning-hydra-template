@@ -1,20 +1,40 @@
-_target_: lightning.pytorch.trainer.Trainer
+_target_: src.trainer.Trainer
+_convert_: all # pass plain python dicts instead of DictConfig
 
-default_root_dir: ${paths.output_dir}
+output_dir: ${paths.output_dir}
 
 min_epochs: 1 # prevents early stopping
 max_epochs: 10
 
-# CUDA by default; other devices (e.g. mps on a Mac) keep their settings on their own branch
-accelerator: gpu
-devices: 1
+# CUDA by default (fails if CUDA is unavailable); `cpu: true` trains on the CPU.
+# Several GPUs: start with `scripts/launch.sh` (see README).
+# Other devices (e.g. mps on a Mac) keep their settings on their own branch.
+cpu: false
 
-# mixed precision for extra speed-up
-# precision: 16
+# "no", "fp16" or "bf16" (keep the quotes: a bare `no` is read as false)
+mixed_precision: "no"
 
-# perform a validation loop every N training epochs
-check_val_every_n_epoch: 1
+gradient_accumulation_steps: 1
+gradient_clip_val: null
 
-# set True to to ensure deterministic results
-# makes training slower but gives more reproducibility than just setting seeds
-deterministic: False
+# use part of the data per epoch: a fraction (float) or a number of batches (int); null = all
+limit_train_batches: null
+limit_val_batches: null
+limit_test_batches: null
+
+# keep <output_dir>/checkpoints/best (best `monitor` value) and .../last; null saves nothing
+checkpoint:
+  monitor: "val/acc"
+  mode: "max"
+  save_last: true
+
+# stop when `monitor` has not improved for `patience` epochs; null disables early stopping
+early_stopping:
+  monitor: "val/acc"
+  mode: "max"
+  patience: 100
+
+progress_bar: true
+
+# raise an exception if NaN or +/-inf appears in the backward pass (slow)
+detect_anomaly: false

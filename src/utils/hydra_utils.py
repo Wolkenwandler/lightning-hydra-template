@@ -10,7 +10,6 @@ import hydra
 # authorize itself.
 EXECUTION_WHITELIST = (
     "src.*",
-    "lightning.pytorch.*",
     "torch.optim.*",
     "colorlog.ColoredFormatter",  # hydra/job_logging: colorlog
 )
@@ -31,8 +30,8 @@ def plain_partial(factory: Any) -> Any:
     """Turn a `_partial_: true` factory from `hydra.utils.instantiate` into a plain
     `functools.partial`.
 
-    Hydra >= 1.4 returns a partial subclass that cannot be pickled, which breaks strategies that
-    pickle the `LightningModule` (e.g. `ddp_spawn`). Its target was already checked against the
+    Hydra >= 1.4 returns a partial subclass that cannot be pickled, which breaks launchers that
+    pickle the model (e.g. spawn-based multiprocessing). Its target was already checked against the
     execution whitelist when it was instantiated.
 
     :param factory: A partial returned by Hydra, or any other object (returned unchanged).

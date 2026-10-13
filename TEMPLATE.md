@@ -5,6 +5,21 @@
 - 模板仓库：<https://github.com/Wolkenwandler/lightning-hydra-template>，下文用 `<模板>` 表示它的本地 clone 路径。
 - 导入工具：`<模板>/scripts/new_project.py`。只用 Python 标准库，Python >= 3.9 即可运行，不需要先装项目依赖。
 
+## 选择分支
+
+| 分支 | 训练框架 | 适合 |
+|---|---|---|
+| `main` | PyTorch Lightning | 想用现成的功能（callback、多种分布式策略），少写训练代码 |
+| `accelerate` | Hugging Face Accelerate 加上精简的训练循环 `src/trainer.py` | 想完全掌控训练循环，或者要和 Hugging Face 生态（transformers 等）配合 |
+
+两个分支的配置结构、输出目录、记录方式（csv 加离线 wandb）和导入方式相同。导入脚本复制的是**运行它的那份 checkout** 里的文件。要从模板主 clone 当前没有检出的分支导入时，不要切换主 clone 的分支，用一个临时 worktree：
+
+```bash
+git -C <模板> worktree add /tmp/template-accelerate accelerate
+python3 /tmp/template-accelerate/scripts/new_project.py <目标目录>
+git -C <模板> worktree remove /tmp/template-accelerate
+```
+
 ## 快速导入
 
 ```bash
@@ -16,7 +31,7 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 1. 复制模板里所有被 git 跟踪的文件，下面“不复制的文件”除外。
 2. 把项目名写进 `pyproject.toml`、`environment.yaml`、wandb 的 `project` 字段和 README 标题。项目名默认取目标目录名。
-3. 在目标目录写一个 `.template-source`，记录模板的远程地址和 commit，以后同步模板更新时要用到。
+3. 在目标目录写一个 `.template-source`，记录模板的远程地址、分支和 commit，以后同步模板更新时要用到。
 4. **不覆盖任何已有文件**：只要有一个文件会被覆盖，脚本就什么都不复制，并列出这些冲突文件。
 5. 模板有未提交的修改时直接拒绝执行，保证 `.template-source` 里记录的 commit 和实际复制的代码一致。
 
@@ -34,8 +49,8 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 | 类别 | 文件 | 导入后 |
 |---|---|---|
-| 训练框架 | `src/train.py`、`src/eval.py`、`src/utils/`、`src/__init__.py`、`configs/train.yaml`、`configs/eval.yaml`、`configs/__init__.py` | 一般不改 |
-| 配置组 | `configs/{callbacks,debug,extras,hydra,logger,paths,trainer}/`、`configs/local/.gitkeep` | 按需调整参数 |
+| 训练框架 | `src/trainer.py`、`src/train.py`、`src/eval.py`、`src/utils/`、`src/__init__.py`、`scripts/launch.sh`、`configs/train.yaml`、`configs/eval.yaml`、`configs/__init__.py` | 一般不改 |
+| 配置组 | `configs/{debug,extras,hydra,logger,paths,trainer}/`、`configs/local/.gitkeep` | 按需调整参数 |
 | MNIST 示例 | `configs/data/mnist.yaml`、`configs/model/mnist.yaml`、`configs/experiment/example.yaml`、`src/data/mnist_datamodule.py`、`src/models/mnist_module.py`、`src/models/components/simple_dense_net.py`、`tests/test_datamodules.py` | 参照它写自己的数据和模型，写好后删掉 |
 | 测试 | `tests/conftest.py`、`tests/helpers/`、`tests/test_{configs,train,eval,sweeps}.py`、`tests/__init__.py` | 保留，用来检查框架没被改坏 |
 | 工程 | `pyproject.toml`、`environment.yaml`、`Makefile`、`.pre-commit-config.yaml`、`.github/workflows/ci.yml`、`.gitignore`、`.env.example` | 添加自己的依赖 |
@@ -52,16 +67,17 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 ## 导入后要改什么
 
-1. **数据**：新建 `src/data/<名字>_datamodule.py` 和 `configs/data/<名字>.yaml`。配置里保留 `_convert_: all`，让 hparams 只包含普通数据。
-2. **模型**：新建 `src/models/<名字>_module.py`，网络结构放在 `src/models/components/`；再新建 `configs/model/<名字>.yaml`。照抄 `MNISTLitModule` 的两处写法：
-   - `save_hyperparameters(ignore=[...])` 里排除网络和 optimizer/scheduler 工厂。否则 torch >= 2.6 默认 `weights_only=True`，checkpoint 会加载失败。
-   - 工厂对象经过 `plain_partial(...)` 再保存。否则用 Hydra 1.4 时 `ddp_spawn` 无法 pickle 模型。
+1. **数据**：新建 `src/data/<名字>_datamodule.py` 和 `configs/data/<名字>.yaml`，提供 `prepare_data`、`setup` 和三个 `*_dataloader` 方法。配置里的 `batch_size` 是全局 batch size，多进程时会平均分给各进程。
+2. **模型**：新建 `src/models/<名字>_module.py`，网络结构放在 `src/models/components/`；再新建 `configs/model/<名字>.yaml`。照 `MNISTModule` 实现训练循环需要的三个方法：
+   - `forward(batch)`：返回 `"loss"`（用于反向传播的标量），以及逐样本的张量，比如预测和标签。训练循环会把逐样本张量从所有进程收集起来。
+   - `compute_metrics(outputs)`：用一个 epoch 的逐样本张量计算指标。
+   - `configure_optimizers()`：返回优化器和可选的学习率调度器配置。工厂对象经过 `plain_partial(...)` 再保存，否则用 Hydra 1.4 时模型无法 pickle。
 3. **默认配置**：把 `configs/train.yaml` 和 `configs/eval.yaml` 里的 `data: mnist`、`model: mnist` 换成新的配置；在 `configs/experiment/` 下写自己的实验配置。
 4. **执行白名单**：配置里新出现的 `_target_` 所在的包，要加进 `src/utils/hydra_utils.py` 的 `EXECUTION_WHITELIST`，比如 `"torchvision.transforms.*"`。
 5. **测试**：`tests/test_datamodules.py` 改成测试自己的 DataModule。`test_train`、`test_eval` 和 `test_sweeps` 用的是默认配置，第 3 步改完后会自动测新模型。
 6. **删除示例**：上面几步都完成后，删掉 MNIST 相关文件，并检查 `configs/` 里不再引用 `mnist`。
 7. **依赖**：新依赖同时加到 `pyproject.toml` 和 `environment.yaml`。
-8. **设备**：`main` 分支默认用 CUDA（`configs/trainer/default.yaml`）。其他设备，比如 Mac 的 mps，各开一个分支维护，不要在 `main` 里改成 `auto`。
+8. **设备**：默认用 CUDA，没有 CUDA 时直接报错，要用 CPU 就设置 `trainer.cpu=true`（`configs/trainer/default.yaml`）。多卡用 `scripts/launch.sh` 启动，命令见 README。其他设备，比如 Mac 的 mps，各开一个分支维护，不要改成自动选择设备。
 9. **记录**：默认把指标写到 csv 和离线 wandb。wandb 项目名已经改成新项目名；训练完用 `wandb sync` 手动上传，命令见 README。
 
 ## 验证
@@ -71,7 +87,7 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 1. **先检查已有环境**（例如容器的默认 Python）里的关键包：
 
    ```bash
-   python -c "import sys, torch, lightning, hydra, torchmetrics; print(sys.version.split()[0], torch.__version__, torch.cuda.is_available(), lightning.__version__, hydra.__version__, torchmetrics.__version__)"
+   python -c "import sys, torch, accelerate, hydra; print(sys.version.split()[0], torch.__version__, torch.cuda.is_available(), accelerate.__version__, hydra.__version__)"
    python -c "import omegaconf, rootutils, rich, colorlog, wandb, pytest"   # 缺哪个包就会报错
    ```
 
@@ -83,7 +99,7 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
    python src/train.py debug=default
    ```
 
-   不要在共享环境里运行 `pip install -e .`：它会按 `pyproject.toml` 升级已有的包，比如把 lightning 升到 2.6.6 以上，影响其他用这个环境的人。`sh` 只有 `tests/test_sweeps.py` 用到，缺少时这几个测试会自动跳过，可以直接运行 `python src/train.py -m ...` 来补测。
+   不要在共享环境里运行 `pip install -e .`：它会按 `pyproject.toml` 升级已有的包，影响其他用这个环境的人。`sh` 只有 `tests/test_sweeps.py` 用到，缺少时这几个测试会自动跳过，可以直接运行 `python src/train.py -m ...` 来补测。
 
 3. **缺包或版本不够时**，不要装进共享环境，而是在它上面建一个叠加环境，只补缺的包：
 
@@ -94,15 +110,17 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 4. **以上都不行，或者项目需要长期独立维护环境时**，再新建环境：`conda env create -f environment.yaml`。
 
-已有环境里的版本低于 `pyproject.toml` 的下限时，只要测试通过就可以先用。但要在实验记录里写明实际版本。注意 lightning 2.6.6 之前的版本缺少 `load_from_checkpoint` 的安全修复，只加载自己生成的 checkpoint 时风险很小。
+已有环境里的版本低于 `pyproject.toml` 的下限时，只要测试通过就可以先用。但要在实验记录里写明实际版本。
 
 已经完整验证过的环境组合：
 
-| Python | torch | lightning | Hydra | 说明 |
+| Python | torch | accelerate | Hydra | 说明 |
 |---|---|---|---|---|
-| 3.12 | 2.13.0 | 2.6.6 | 1.3.7 / 1.4.0rc1 | conda-forge 新建的环境 |
-| 3.11 | 2.8.0+cu128 | 2.6.1 | 1.3.2 | 容器自带的环境，没有 `sh`，扫参改为直接运行 |
+| 3.12 | 2.13.0 | 1.15.0 | 1.3.7 / 1.4.0rc1 | conda-forge 新建的环境，加叠加环境补 accelerate |
+| 3.11 | 2.8.0+cu128 | 0.34.2 | 1.3.2 | 容器自带的环境，加叠加环境把 accelerate 0.33 换成 0.34.2；没有 `sh`，扫参改为直接运行 |
 | 3.10 / 3.12 | 最新 CPU 版 | 最新 | 最新 1.3.x | GitHub CI |
+
+accelerate 0.33 及更早的版本配 torch >= 2.6 时，训练、评估和多卡都能跑，但**无法断点续训**（`load_state` 报 `KeyError: 'step'`），见 `docs/solutions.md` 的 SOL-20261013-03。环境里是这些版本时，用上面的叠加环境补一个 >= 0.34 的 accelerate。
 
 ## 同步模板的后续更新
 
@@ -110,11 +128,12 @@ python3 <模板>/scripts/new_project.py <目标目录> [--name 项目名]
 
 ```bash
 C=$(sed -n 's/^commit: //p' .template-source)
-git -C <模板> log --oneline $C..HEAD                       # 有哪些更新
-git -C <模板> diff $C..HEAD -- . ':!TEMPLATE.md' ':!scripts' ':!docs' > /tmp/template.diff
+BR=$(sed -n 's/^branch: //p' .template-source)   # 导入时的模板分支，如 main 或 accelerate
+git -C <模板> log --oneline $C..$BR                       # 有哪些更新
+git -C <模板> diff $C..$BR -- . ':!TEMPLATE.md' ':!scripts/new_project.py' ':!docs' > /tmp/template.diff
 git apply --check /tmp/template.diff && git apply /tmp/template.diff
 ```
 
 - 如果项目里改过的文件和更新冲突，`--check` 会失败。这时逐个文件对照 diff 手动合并，或者用 `git apply --reject` 处理能应用的部分，再手动处理 `.rej` 文件。
 - 涉及项目名的那几行（见“快速导入”第 2 点）在新项目里已经被替换过，合并时保留新项目的名字。
-- 合并并验证后，把 `.template-source` 里的 `commit` 更新为 `git -C <模板> rev-parse HEAD`，和这次合并放在同一个提交里。
+- 合并并验证后，把 `.template-source` 里的 `commit` 更新为 `git -C <模板> rev-parse $BR`，和这次合并放在同一个提交里。

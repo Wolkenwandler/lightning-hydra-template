@@ -1,6 +1,5 @@
 import hydra
-from lightning import Callback
-from lightning.pytorch.loggers import Logger
+from accelerate.tracking import GeneralTracker
 from omegaconf import DictConfig
 
 from src.utils import pylogger
@@ -8,36 +7,13 @@ from src.utils import pylogger
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
 
-def instantiate_callbacks(callbacks_cfg: DictConfig) -> list[Callback]:
-    """Instantiates callbacks from config.
-
-    :param callbacks_cfg: A DictConfig object containing callback configurations.
-    :return: A list of instantiated callbacks.
-    """
-    callbacks: list[Callback] = []
-
-    if not callbacks_cfg:
-        log.warning("No callback configs found! Skipping..")
-        return callbacks
-
-    if not isinstance(callbacks_cfg, DictConfig):
-        raise TypeError("Callbacks config must be a DictConfig!")
-
-    for _, cb_conf in callbacks_cfg.items():
-        if isinstance(cb_conf, DictConfig) and "_target_" in cb_conf:
-            log.info(f"Instantiating callback <{cb_conf._target_}>")
-            callbacks.append(hydra.utils.instantiate(cb_conf))
-
-    return callbacks
-
-
-def instantiate_loggers(logger_cfg: DictConfig) -> list[Logger]:
-    """Instantiates loggers from config.
+def instantiate_loggers(logger_cfg: DictConfig) -> list[GeneralTracker]:
+    """Instantiates loggers (Accelerate trackers) from config.
 
     :param logger_cfg: A DictConfig object containing logger configurations.
-    :return: A list of instantiated loggers.
+    :return: A list of instantiated trackers.
     """
-    logger: list[Logger] = []
+    logger: list[GeneralTracker] = []
 
     if not logger_cfg:
         log.warning("No logger configs found! Skipping...")

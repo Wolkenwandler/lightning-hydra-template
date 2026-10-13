@@ -6,7 +6,6 @@
 defaults:
   - override /data: mnist
   - override /model: mnist
-  - override /callbacks: default
   - override /trainer: default
 
 # all parameters below will be merged with parameters from default configurations set above

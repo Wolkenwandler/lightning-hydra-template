@@ -8,7 +8,7 @@ from hydra import compose, initialize
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import DictConfig, open_dict
 
-from src.utils import EXECUTION_WHITELIST, HAS_EXECUTION_WHITELIST
+from src.utils import EXECUTION_WHITELIST, HAS_EXECUTION_WHITELIST, reset_accelerate_state
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +27,13 @@ def hydra_execution_whitelist():
         yield
 
 
+@pytest.fixture(autouse=True)
+def fresh_accelerate_state():
+    """Let every test create its `Accelerator` with its own settings (e.g. CPU or GPU)."""
+    yield
+    reset_accelerate_state()
+
+
 @pytest.fixture(scope="package")
 def cfg_train_global() -> DictConfig:
     """A pytest fixture for setting up a default Hydra DictConfig for training.
@@ -43,8 +50,8 @@ def cfg_train_global() -> DictConfig:
             cfg.trainer.limit_train_batches = 0.01
             cfg.trainer.limit_val_batches = 0.1
             cfg.trainer.limit_test_batches = 0.1
-            cfg.trainer.accelerator = "cpu"
-            cfg.trainer.devices = 1
+            cfg.trainer.cpu = True
+            cfg.trainer.progress_bar = False
             cfg.data.num_workers = 0
             cfg.data.pin_memory = False
             cfg.extras.print_config = False
@@ -68,8 +75,8 @@ def cfg_eval_global() -> DictConfig:
             cfg.paths.root_dir = str(rootutils.find_root(indicator=".project-root"))
             cfg.trainer.max_epochs = 1
             cfg.trainer.limit_test_batches = 0.1
-            cfg.trainer.accelerator = "cpu"
-            cfg.trainer.devices = 1
+            cfg.trainer.cpu = True
+            cfg.trainer.progress_bar = False
             cfg.data.num_workers = 0
             cfg.data.pin_memory = False
             cfg.extras.print_config = False

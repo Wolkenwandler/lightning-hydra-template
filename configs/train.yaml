@@ -6,7 +6,6 @@ defaults:
   - _self_
   - data: mnist
   - model: mnist
-  - callbacks: default
   # metrics go to a csv file and an offline wandb run in the output dir (upload later with
   # `wandb sync`); change on the command line, e.g. `logger=tensorboard` or `logger=[]` for none
   - logger: [csv, wandb]
@@ -38,10 +37,10 @@ tags: ["dev"]
 train: True
 
 # evaluate on test set, using best model weights achieved during training
-# lightning chooses best weights based on the metric specified in checkpoint callback
+# the best weights are chosen by `trainer.checkpoint.monitor`
 test: True
 
-# simply provide checkpoint path to resume training
+# checkpoint directory to resume training from, e.g. .../checkpoints/last
 ckpt_path: null
 
 # seed for random number generators in pytorch, numpy and python.random

@@ -5,11 +5,11 @@ import rich
 import rich.syntax
 import rich.tree
 from hydra.core.hydra_config import HydraConfig
-from lightning_utilities.core.rank_zero import rank_zero_only
 from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.prompt import Prompt
 
 from src.utils import pylogger
+from src.utils.pylogger import rank_zero_only
 
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
@@ -20,7 +20,6 @@ def print_config_tree(
     print_order: Sequence[str] = (
         "data",
         "model",
-        "callbacks",
         "logger",
         "trainer",
         "paths",
@@ -33,7 +32,7 @@ def print_config_tree(
 
     :param cfg: A DictConfig composed by Hydra.
     :param print_order: Determines in what order config components are printed. Default is ``("data", "model",
-    "callbacks", "logger", "trainer", "paths", "extras")``.
+    "logger", "trainer", "paths", "extras")``.
     :param resolve: Whether to resolve reference fields of DictConfig. Default is ``False``.
     :param save_to_file: Whether to export config to the hydra output folder. Default is ``False``.
     """

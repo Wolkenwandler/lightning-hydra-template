@@ -6,8 +6,7 @@
 # overwrite task name so debugging logs are stored in separate folder
 task_name: "debug"
 
-# disable callbacks and loggers during debugging
-callbacks: null
+# disable loggers during debugging
 logger: null
 
 extras:
@@ -26,8 +25,10 @@ hydra:
 
 trainer:
   max_epochs: 1
-  accelerator: cpu # debuggers don't like gpus
-  devices: 1 # debuggers don't like multiprocessing
+  cpu: true # debuggers don't like gpus
+  checkpoint: null # save no checkpoints
+  early_stopping: null
+  progress_bar: false
   detect_anomaly: true # raise exception if NaN or +/-inf is detected in any tensor
 
 data:

@@ -1,7 +1,30 @@
+import functools
 import logging
-from collections.abc import Mapping
+import os
+from collections.abc import Callable, Mapping
+from typing import Any
 
-from lightning_utilities.core.rank_zero import rank_prefixed_message, rank_zero_only
+import torch
+
+
+def get_rank() -> int:
+    """Rank of this process: from `torch.distributed` once it is initialized, before that from the
+    `RANK` variable set by launchers such as `accelerate launch` (0 without a launcher)."""
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        return torch.distributed.get_rank()
+    return int(os.environ.get("RANK", 0))
+
+
+def rank_zero_only(fn: Callable) -> Callable:
+    """Run the decorated function on the process with rank 0 only (returns `None` elsewhere)."""
+
+    @functools.wraps(fn)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        if get_rank() == 0:
+            return fn(*args, **kwargs)
+        return None
+
+    return wrapped
 
 
 class RankedLogger(logging.LoggerAdapter):
@@ -37,10 +60,8 @@ class RankedLogger(logging.LoggerAdapter):
         """
         if self.isEnabledFor(level):
             msg, kwargs = self.process(msg, kwargs)
-            current_rank = getattr(rank_zero_only, "rank", None)
-            if current_rank is None:
-                raise RuntimeError("The `rank_zero_only.rank` needs to be set before use")
-            msg = rank_prefixed_message(msg, current_rank)
+            current_rank = get_rank()
+            msg = f"[rank: {current_rank}] {msg}"
             if self.rank_zero_only:
                 if current_rank == 0:
                     self.logger.log(level, msg, *args, **kwargs)

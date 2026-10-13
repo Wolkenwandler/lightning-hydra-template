@@ -65,4 +65,3 @@ def test_hydra_sweep_ddp_sim(tmp_path: Path) -> None:
         "model.optimizer.lr=0.005,0.01,0.02",
     ] + overrides
     run_sh_command(command)
-

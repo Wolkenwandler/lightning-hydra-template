@@ -76,6 +76,7 @@ def main() -> int:
         )
         return 1
     commit = git("rev-parse", "HEAD").strip()
+    branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
 
     files = sorted(f for f in git("ls-files", "-z").split("\0") if f and f not in TEMPLATE_ONLY)
     conflicts = [f for f in files + [".template-source"] if (target / f).exists()]
@@ -124,12 +125,13 @@ def main() -> int:
     (target / ".template-source").write_text(
         f"template: {TEMPLATE_NAME}\n"
         f"remote: {remote}\n"
+        f"branch: {branch}\n"
         f"commit: {commit}\n"
         f"date: {datetime.date.today().isoformat()}\n",
         encoding="utf-8",
     )
 
-    print(f"copied {len(files)} files from {TEMPLATE_NAME} ({commit[:7]}) to {target}")
+    print(f"copied {len(files)} files from {TEMPLATE_NAME} ({branch} {commit[:7]}) to {target}")
     print(f"project name: {name} (pyproject.toml, environment.yaml, wandb project, README)")
     print(f"next steps: section '导入后要改什么' in {TEMPLATE_ROOT / 'TEMPLATE.md'}")
     return 0
